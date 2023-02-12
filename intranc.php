@@ -1,126 +1,99 @@
 <?php
-/**
+/*
  * Plugin Name: IntraNC
- * Plugin URI: https://github.com/georgeuhm/IntraNC
- * Description: Enables users to login to their Nextcloud account using their WordPress login credentials.
- * Author: georgeuhm
+ * Plugin URI: https://github.com/ateluhm/IntraNC
+ * Description: A plugin that helps users login to their Nextcloud account using their WordPress credentials.
+ * Author: George Varga
  * Author URI: https://github.com/georgeuhm
- * Version: 1.0.0
- * License: GPL2+
- * License URI: http://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: intranc
+ * Version: 1.4
  */
 
-// Exit if accessed directly
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
+// Define plugin constants
+define( 'INTRANC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+define( 'INTRANC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
-class IntraNC {
+// Include the settings page
+require_once INTRANC_PLUGIN_DIR . 'inc/settings-page.php';
 
-	/**
-	 * The Nextcloud login URL.
-	 *
-	 * @var string
-	 */
-	private $nextcloud_login_url = '';
+// Register the shortcode for the plugin link
+add_shortcode( 'inchost_do', 'inchost_do_shortcode' );
 
-	/**
-	 * The Nextcloud preferred landing page URL.
-	 *
-	 * @var string
-	 */
-	private $nextcloud_landing_page_url = '';
+// Shortcode function to display the plugin link
+function inchost_do_shortcode() {
+  // Get the plugin options
+  $options = get_option( 'intranc_options' );
 
-	/**
-	 * The WordPress login URL.
-	 *
-	 * @var string
-	 */
-	private $wordpress_login_url = '';
-
-	/**
-	 * The text for the shortcode link.
-	 *
-	 * @var string
-	 */
-	private $shortcode_link_text = '';
-
-	/**
-	 * IntraNC constructor.
-	 */
-	public function __construct() {
-		$this->init();
-		$this->add_actions();
-	}
-
-	/**
-	 * Initializes the plugin variables.
-	 */
-	private function init() {
-		$options = get_option( 'intranc_options' );
-		$this->nextcloud_login_url        = ! empty( $options['nextcloud_login_url'] ) ? $options['nextcloud_login_url'] : '';
-		$this->nextcloud_landing_page_url = ! empty( $options['nextcloud_landing_page_url'] ) ? $options['nextcloud_landing_page_url'] : '';
-		$this->wordpress_login_url        = ! empty( $options['wordpress_login_url'] ) ? $options['wordpress_login_url'] : '';
-		$this->shortcode_link_text        = ! empty( $options['shortcode_link_text'] ) ? $options['shortcode_link_text'] : '';
-	}
-
-	/**
-	 * Adds plugin actions.
-	 */
-	private function add_actions() {
-		add_action( 'init', array( $this, 'register_shortcodes' ) );
-		add_action( 'admin_menu', array( $this, 'add_options_page' ) );
-		add_action( 'admin_init', array( $this, 'register_settings' ) );
-	}
-
-	/**
-	 * Registers the [inchost_do] shortcode.
-	 */
-	public function register_shortcodes() {
-		add_shortcode( 'inchost_do', array( $this, 'shortcode_inchost_do' ) );
-	}
-
-	/**
-	 * Adds the options page to the WordPress admin.
-   */
-
-   // Create shortcode
-add_shortcode( 'inchost_do', 'inchost_display_link' );
-
-// Function to display link based on user login status
-function inchost_display_link() {
-    if ( is_user_logged_in() ) {
-        $nextcloud_preferred_landing_page = get_option( 'nextcloud_preferred_landing_page', 'https://cloud.example.com/index.php/apps/files' );
-        $shortcode_text = get_option( 'shortcode_text', 'Cloud Link' );
-        return '<a href="' . esc_url( $nextcloud_preferred_landing_page ) . '" target="_blank">' . esc_html( $shortcode_text ) . '</a>';
-    } else {
-        $wordpress_login_page = get_option( 'wordpress_login_page', 'https://example.com/wp-login.php' );
-        return '<a href="' . esc_url( $wordpress_login_page ) . '">Login to access ' . esc_html( get_option( 'shortcode_text', 'Cloud Link' ) ) . '</a>';
-    }
+  // Check if the user is logged in to WordPress
+  if ( is_user_logged_in() ) {
+    // Get the Nextcloud preferred landing page link
+    $nextcloud_landing_page = $options['nextcloud_landing_page'];
+    return '<a href="' . $nextcloud_landing_page . '" target="_blank">' . $options['shortcode_text'] . '</a>';
+  } else {
+    // Get the WordPress login link
+    $wordpress_login = $options['wordpress_login'];
+    return '<a href="' . $wordpress_login . '">' . $options['shortcode_text'] . '</a>';
+  }
 }
 
 // Function to verify if the login was successful in Nextcloud
-function inchost_verify_nextcloud_login( $username, $password ) {
-    $nextcloud_login_link = get_option( 'nextcloud_login_link', 'https://cloud.example.com/index.php/login' );
+function intranc_verify_login() {
+  // Get the plugin options
+  $options = get_option( 'intranc_options' );
 
-    // Use cURL library to post data to the Nextcloud login form
-    $ch = curl_init();
-    curl_setopt( $ch, CURLOPT_URL, $nextcloud_login_link );
-    curl_setopt( $ch, CURLOPT_POST, 1 );
-    curl_setopt( $ch, CURLOPT_POSTFIELDS, "user=$username&password=$password" );
-    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-    curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, 1 );
-    curl_setopt( $ch, CURLOPT_COOKIEJAR, 'cookie.txt' );
-    curl_setopt( $ch, CURLOPT_COOKIEFILE, 'cookie.txt' );
-    curl_exec( $ch );
-    $http_code = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
-    curl_close( $ch );
+  // Check if the user has entered their WordPress credentials
+  if ( isset( $_POST['wordpress_username'] ) && isset( $_POST['wordpress_password'] ) ) {
+    // Get the entered WordPress credentials
+    $wordpress_username = sanitize_text_field( $_POST['wordpress_username'] );
+    $wordpress_password = sanitize_text_field( $_POST['wordpress_password'] );
 
-    // If HTTP code is 200, login was successful
-    if ( $http_code == 200 ) {
-        return true;
+    // Check if the entered WordPress credentials match with the user's credentials
+    $user = wp_authenticate( $wordpress_username, $wordpress_password );
+    if ( is_wp_error( $user ) ) {
+      // Show error message if the entered credentials are incorrect
+      echo '<p>Error: Incorrect WordPress credentials. Please try again.</p>';
     } else {
-        return false;
+      // Redirect to the Nextcloud login link if the entered credentials are correct
+      wp_redirect( $options['nextcloud_login'] );
+      exit;
     }
+  }
+
+  // Show the form to enter WordPress credentials
+  echo '<form action="" method="post">';
+  echo '<label for="wordpress_username">WordPress Username:</label>';
+  echo '<input type="text" id="wordpress_username" name="wordpress_username" required>';
+  echo '<label for="wordpress_password">WordPress Password:</label>';
+  echo '<input type="password" id="wordpress_password" name="wordpress_password" required>';
+  echo '<input type="submit" value="Login">';
+  echo '</form>';
+}
+
+// Action to add the plugin settings page
+add_action( 'admin_menu', 'intranc_add_admin_menu' );
+
+// Function to add the plugin settings page
+function intranc_add_admin_menu() {
+  add_options_page( 'IntraNC Settings', 'IntraNC', 'manage_options', 'intranc', 'intranc_options_page' );
+}
+
+// Function to register plugin settings
+add_action( 'admin_init', 'intranc_settings' );
+
+// Function to register plugin settings
+function intranc_settings() {
+  register_setting( 'intranc_options_group', 'intranc_options', 'intranc_options_validate' );
+}
+
+// Function to validate plugin settings
+function intranc_options_validate( $input ) {
+  $new_input = array();
+  if ( isset( $input['nextcloud_login'] ) )
+    $new_input['nextcloud_login'] = esc_url_raw( $input['nextcloud_login'] );
+  if ( isset( $input['nextcloud_landing_page'] ) )
+    $new_input['nextcloud_landing_page'] = esc_url_raw( $input['nextcloud_landing_page'] );
+  if ( isset( $input['wordpress_login'] ) )
+    $new_input['wordpress_login'] = esc_url_raw( $input['wordpress_login'] );
+  if ( isset( $input['shortcode_text'] ) )
+    $new_input['shortcode_text'] = sanitize_text_field( $input['shortcode_text'] );
+  return $new_input;
 }
